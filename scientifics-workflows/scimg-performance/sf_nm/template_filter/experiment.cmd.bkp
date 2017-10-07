@@ -1,0 +1,9 @@
+#!/bin/bash
+
+PGSQL="/home/users/karyanna/algorithms/pgsql"
+$PGSQL/bin/psql -U scc2 -d scc2_filter -c "SELECT DISTINCT fasta_file,name,sequence FROM scimg_filter.omerge WHERE omerge.ewkfid = %=DUMMY_ID% ORDER BY omerge.name" -t -F $';' --no-align >%=DUMMY_ID%
+#-h $PGSQL/var/pgsql_socket 
+WORKSPACE=`pwd`
+echo $WORKSPACE
+/home/users/karyanna/algorithms/jre1.8.0_121/bin/java -jar %=WFDIR%/bin/SciMGExtractor.jar filterfile %=DUMMY_ID% $WORKSPACE/
+sleep 3

@@ -1,0 +1,129 @@
+<SciCumulus>
+	<environment verbose="true" type="LOCAL"/>
+	<constraint workflow_exectag="scimg_f_nm-1" cores="23" performance="false"/>
+	<workspace  workflow_dir="/home/users/karyanna/workflows/f_nm"/>
+	<database name="scc2_f_nm" username="karyanna" password="karyanna" port="5432" server="localhost"/>
+	<conceptualWorkflow tag="scimg_f_nm" description="SciMetaGenomics">	
+		<activity tag="dataselection" type="MAP" template="%=WFDIR%/template_dataselection" activation="./experiment.cmd" description="preliminary data selection">
+			<relation reltype="Input" name="idataselection"/>
+			<relation reltype="Output" name="odataselection"/>
+			<field name="NAME" type="text" input="idataselection" output="odataselection"/>
+			<field name="FASTA_FILE" type="file" input="idataselection" output="odataselection" operation="COPY"/>
+		</activity>
+
+		<activity tag="prodigal" type="MAP" template="%=WFDIR%/template_prodigal" activation="./experiment.cmd" description="Prodigal execution">
+			<relation reltype="Input" dependency="dataselection"/>
+			<relation reltype="Output" name="oprodigal"/>
+		
+ 			<field name="NAME" type="text" output="oprodigal"/>
+			<field name="FASTA_FILE" type="file" operation="COPY" output="oprodigal"/>
+			
+			<field name="PRODIGAL_SEQ" type="text"  output="oprodigal"/>
+		</activity>
+
+		<activity tag="metagene" type="MAP" template="%=WFDIR%/template_metagene" activation="./experiment.cmd" description="MetaGeneMark execution">
+			<relation reltype="Input" dependency="dataselection"/>
+			<relation reltype="Output" name="ometagene"/>
+            
+            <field name="NAME" type="text" output="ometagene"/>
+			<field name="FASTA_FILE" type="file" operation="COPY" output="ometagene"/>
+            
+            <field name="METAGENE_SEQ" type="text"  output="ometagene" />
+		</activity>
+
+		<activity tag="fraggene" type="MAP" template="%=WFDIR%/template_fraggene" activation="./experiment.cmd" description="FragGeneScan execution">
+			<relation reltype="Input" dependency="dataselection"/>
+			<relation reltype="Output" name="ofraggene"/>
+            
+            <field name="NAME" type="text" output="ofraggene"/>
+			<field name="FASTA_FILE" type="file" operation="COPY" output="ofraggene"/>
+            
+            <field name="FRAGGENE_SEQ" type="text"  output="ofraggene" />
+		</activity>
+		
+		<activity tag="merge" type="QUERY" template="%=WFDIR%/template_analyses" description="merge maps files" 
+			activation="select DISTINCT F.ewkfid, F.name, F.FASTA_FILE as F_FASTA_FILE,M.FASTA_FILE as M_FASTA_FILE,P.FASTA_FILE as P_FASTA_FILE, M.metagene_seq as M_SEQ, P.prodigal_seq as P_SEQ, F.fraggene_seq as F_SEQ from scimg_f_nm.ofraggene as F, scimg_f_nm.ometagene as M, scimg_f_nm.oprodigal as P where F.name=M.name and F.name=P.name and F.ewkfid=%=EWKFID% and P.ewkfid=%=EWKFID% and M.ewkfid=%=EWKFID%">
+			<relation reltype="Input" dependency="fraggene"/>
+			<relation reltype="Input" dependency="metagene"/>
+			<relation reltype="Input" dependency="prodigal"/>
+			<relation reltype="Input" dependency="dataselection"/>
+			<relation reltype="Output" name="omerge"/>
+			
+			<field name="NAME" type="text" input="ofraggene"/>
+			
+			<field name="NAME" type="text" output="omerge" />	
+			<field name="F_FASTA_FILE" type="text" output="omerge"/>	
+			<field name="M_FASTA_FILE" type="text" output="omerge"/>	
+			<field name="P_FASTA_FILE" type="text" output="omerge"/>	
+			<field name="F_SEQ" type="text" output="omerge"/>	
+			<field name="P_SEQ" type="text" output="omerge"/>			
+			<field name="M_SEQ" type="text" output="omerge"/>
+			
+		</activity>
+
+<activity tag="filterseq" type="MAP" template="%=WFDIR%/template_filterseq" activation="./experiment.cmd" description="Blastn execution">
+			<relation reltype="Input" dependency="merge"/>
+			<relation reltype="Output" name="ofilterseq"/>
+			
+			<field name="F_SEQ" type="file" operation="COPY" />
+			<field name="P_SEQ" type="file" operation="COPY" />
+			<field name="M_SEQ" type="file" operation="COPY" />
+			<field name="F_FASTA_FILE" type="text" output="ofilterseq"/>	
+            
+            		<field name="NAME" type="text" output="ofilterseq"/>
+            		<field name="NEW_SEQ_NAME" type="file"  output="ofilterseq" />
+
+		</activity>
+		
+		<activity tag="filterfile" type="MAP" template="%=WFDIR%/template_filter" activation="./experiment.cmd" description="Extract file for filter execution">
+			<relation reltype="Input" dependency="filterseq"/>
+			<relation reltype="Output" name="ofilter"/>
+            		<field name="NAME" type="text" output="ofilter"/>
+            		
+            		<field name="F_FASTA_FILE" type="text" />
+			<field name="NEW_FASTA_FILE" type="file" operation="COPY" output="ofilter"/>
+
+		</activity>
+
+		<activity tag="blast" type="MAP" template="%=WFDIR%/template_blast" activation="./experiment.cmd" description="Blastn execution">
+			<relation reltype="Input" dependency="filterfile"/>
+			<relation reltype="Output" name="oblast"/>
+            
+            <field name="NAME" type="text" output="oblast"/>
+			<field name="NEW_FASTA_FILE" type="file" operation="COPY" output="oblast"/>
+            
+            <field name="BLAST_SEQ" type="text"  output="oblast" />
+		</activity>	
+
+		<activity tag="finalmerge" type="QUERY" template="%=WFDIR%/template_analyses" description="merge ab initio e blast files" 
+			activation="select DISTINCT B.ewkfid, B.name, B.blast_seq as B_SEQ, B.new_fasta_file as B_FASTA_FILE, FS.new_seq_name as NEW_SEQ from scimg_f_nm.oblast as B, scimg_f_nm.ofilterseq as FS where  B.name=FS.name and B.ewkfid=%=EWKFID% and FS.ewkfid=%=EWKFID%">
+			<relation reltype="Input" dependency="filterseq"/>
+			<relation reltype="Input" dependency="blast"/>
+			<relation reltype="Output" name="ofinalmerge"/>
+
+            <field name="NEW_SEQ" type="text"   output="ofinalmerge"/>
+						
+			<field name="NAME" type="text" output="ofinalmerge" />	
+			<field name="B_SEQ" type="text" output="ofinalmerge"/>	
+			<field name="B_FASTA_FILE" type="text" output="ofinalmerge"/>	
+
+		</activity>
+		
+		<activity tag="finallist" type="MAP" template="%=WFDIR%/template_list" activation="./experiment.cmd" description="final execution">
+			<relation reltype="Input" dependency="finalmerge"/>
+			<relation reltype="Output" name="ofinallist"/>
+			
+			<field name="B_SEQ" type="file" operation="COPY" />
+
+                                    <field name="NEW_SEQ" type="file" operation="COPY" />
+
+            <field name="NAME" type="text" output="ofinallist"/>
+                        <field name="FINAL_SEQ_NAME" type="file"  output="ofinallist" operation="COPY"/>
+
+		</activity>
+		
+	</conceptualWorkflow>
+	<executionWorkflow execmodel="DYN_FAF" exectag="scimg_f_nm_1" tag="scimg_f_nm" expdir="%=WFDIR%/exp" max_failure="5" user_interaction="false" redundancy="true" reliability="0.9" >
+		<relation name="idataselection" filename="idataselection.dataset"/>
+	</executionWorkflow>
+</SciCumulus>

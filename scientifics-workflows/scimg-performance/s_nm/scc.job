@@ -1,0 +1,53 @@
+#!/bin/bash
+#PBS -l select=30:ncpus=48:mpiprocs=24
+#PBS -l walltime=5:00:00
+#PBS -j oe  
+#PBS -N s_nm_c1
+#PBS -V
+#PBS -m bae
+#PBS -M silviabenza@gmail.com  
+# Launch application
+export JAVA_HOME=/home/users/karyanna/algorithms/jre1.8.0_121/bin
+CHIRON=/home/users/karyanna/SCC2/SciCumulus/versions/v_001_000_002
+POSTGRES_BIN=/home/users/karyanna/program/postgresql-9.4.4/bin
+SCC_DIR=/home/users/karyanna/SCC2/SciCumulus/versions/v_001_000_002
+$SCC_DIR/shutdown-database
+echo "Starting job..."
+hostname
+
+echo "Getting environments variables..."
+export WORK=/home/users/karyanna/workflows
+WORKFLOW_DIR=$WORK/s_nm
+cd $WORKFLOW_DIR
+
+cp $PBS_NODEFILE nodes.pbs
+
+echo "Setting up database environment..."
+$JAVA_HOME/java -jar $CHIRON/EnvironmentFileGenerator-LoboC-1.0.jar nodes.pbs
+cat machines.conf database.conf > nodes.txt
+rm machines.conf database.conf
+$JAVA_HOME/java -jar $CHIRON/ListMachines.jar nodes.txt
+
+$JAVA_HOME/java -jar $CHIRON/ChangeXML.jar $WORKFLOW_DIR/SciCumulus.xml database.conf
+cp chiron.conf machines.conf
+
+echo "Starting database instance..."
+$CHIRON/database_starter.sh database.conf
+# start-database
+sleep 3
+
+echo "Restoring database..."
+$JAVA_HOME/java -jar $CHIRON/SCSetup.jar -d $WORKFLOW_DIR/SciCumulus.xml.restore
+$JAVA_HOME/java -jar $CHIRON/SCSetup.jar -i $WORKFLOW_DIR/SciCumulus.xml.restore
+
+echo "Starting Chiron instances..."
+$CHIRON/dispatcher.sh $WORKFLOW_DIR/machines.conf $CHIRON/SCCore.jar $WORKFLOW_DIR/SciCumulus.xml.change
+#$JAVA_HOME/java -jar $CHIRON/SCCore.jar $WORKFLOW_DIR/SciCumulus.xml.restore >> log.out &
+
+echo "Backuping up database..."
+$POSTGRES_BIN/pg_dump scc2_s_nm -U karyanna > bd_s_nm_3_30.bkp.3
+
+echo "Shutting down database instance..."
+$CHIRON/shutdown-database
+
+echo "Finishing job..."
